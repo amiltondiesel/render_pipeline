@@ -105,7 +105,6 @@ public abstract class LightweightShaderGUI : ShaderGUI
             material.SetInt("_ZWrite", 1);
             material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             material.renderQueue = -1;
-            material.SetShaderPassEnabled("ShadowCaster", true);
         }
         else
         {
@@ -119,7 +118,6 @@ public abstract class LightweightShaderGUI : ShaderGUI
                     material.SetInt("_ZWrite", 0);
                     material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
                     material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-                    material.SetShaderPassEnabled("ShadowCaster", false);
                     break;
                 case BlendMode.Premultiply:
                     material.SetOverrideTag("RenderType", "Transparent");
@@ -128,7 +126,6 @@ public abstract class LightweightShaderGUI : ShaderGUI
                     material.SetInt("_ZWrite", 0);
                     material.EnableKeyword("_ALPHAPREMULTIPLY_ON");
                     material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-                    material.SetShaderPassEnabled("ShadowCaster", false);
                     break;
                 case BlendMode.Additive:
                     material.SetOverrideTag("RenderType", "Transparent");
@@ -137,7 +134,6 @@ public abstract class LightweightShaderGUI : ShaderGUI
                     material.SetInt("_ZWrite", 0);
                     material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
                     material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-                    material.SetShaderPassEnabled("ShadowCaster", false);
                     break;
                 case BlendMode.Multiply:
                     material.SetOverrideTag("RenderType", "Transparent");
@@ -146,7 +142,6 @@ public abstract class LightweightShaderGUI : ShaderGUI
                     material.SetInt("_ZWrite", 0);
                     material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
                     material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-                    material.SetShaderPassEnabled("ShadowCaster", false);
                     break;
             }
         }

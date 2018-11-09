@@ -20,37 +20,32 @@ CBUFFER_END
 
 TEXTURE2D(_OcclusionMap);       SAMPLER(sampler_OcclusionMap);
 TEXTURE2D(_MetallicGlossMap);   SAMPLER(sampler_MetallicGlossMap);
-TEXTURE2D(_SpecGlossMap);       SAMPLER(sampler_SpecGlossMap);
 
-#ifdef _SPECULAR_SETUP
-    #define SAMPLE_METALLICSPECULAR(uv) SAMPLE_TEXTURE2D(_SpecGlossMap, sampler_SpecGlossMap, uv)
-#else
+
     #define SAMPLE_METALLICSPECULAR(uv) SAMPLE_TEXTURE2D(_MetallicGlossMap, sampler_MetallicGlossMap, uv)
-#endif
 
 half4 SampleMetallicSpecGloss(float2 uv, half albedoAlpha)
 {
     half4 specGloss;
 
 #ifdef _METALLICSPECGLOSSMAP
+
     specGloss = SAMPLE_METALLICSPECULAR(uv);
     #ifdef _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
         specGloss.a = albedoAlpha * _GlossMapScale;
     #else
         specGloss.a *= _GlossMapScale;
     #endif
-#else // _METALLICSPECGLOSSMAP
-    #if _SPECULAR_SETUP
-        specGloss.rgb = _SpecColor.rgb;
-    #else
+
+#else
         specGloss.rgb = _Metallic.rrr;
-    #endif
 
     #ifdef _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
         specGloss.a = albedoAlpha * _GlossMapScale;
     #else
         specGloss.a = _Glossiness;
     #endif
+
 #endif
 
     return specGloss;
@@ -79,13 +74,8 @@ inline void InitializeStandardLitSurfaceData(float2 uv, out SurfaceData outSurfa
     half4 specGloss = SampleMetallicSpecGloss(uv, albedoAlpha.a);
     outSurfaceData.albedo = albedoAlpha.rgb * _Color.rgb;
 
-#if _SPECULAR_SETUP
-    outSurfaceData.metallic = 1.0h;
-    outSurfaceData.specular = specGloss.rgb;
-#else
     outSurfaceData.metallic = specGloss.r;
     outSurfaceData.specular = half3(0.0h, 0.0h, 0.0h);
-#endif
 
     outSurfaceData.smoothness = specGloss.a;
     outSurfaceData.normalTS = SampleNormal(uv, TEXTURE2D_PARAM(_BumpMap, sampler_BumpMap), _BumpScale);
