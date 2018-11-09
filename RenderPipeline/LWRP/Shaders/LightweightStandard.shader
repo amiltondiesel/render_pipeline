@@ -2,6 +2,9 @@ Shader "LightweightPipeline/Standard (Physically Based)"
 {
     Properties
     {
+        // Specular vs Metallic workflow
+        [HideInInspector] _WorkflowMode("WorkflowMode", Float) = 1.0
+
         _Color("Color", Color) = (0.5,0.5,0.5,1)
         _MainTex("Albedo", 2D) = "white" {}
 
@@ -14,10 +17,11 @@ Shader "LightweightPipeline/Standard (Physically Based)"
         [Gamma] _Metallic("Metallic", Range(0.0, 1.0)) = 0.0
         _MetallicGlossMap("Metallic", 2D) = "white" {}
 
-        [ToggleOff] _CastShadows("CastShadows", Float) = 1.0
+        _SpecColor("Specular", Color) = (0.2, 0.2, 0.2)
+        _SpecGlossMap("Specular", 2D) = "white" {}
+
         [ToggleOff] _SpecularHighlights("Specular Highlights", Float) = 1.0
         [ToggleOff] _GlossyReflections("Glossy Reflections", Float) = 1.0
-        [ToggleOff] _Triplanar("Triplanar", Float) = 1.0
 
         _BumpScale("Scale", Float) = 1.0
         _BumpMap("Normal Map", 2D) = "bump" {}
@@ -30,6 +34,14 @@ Shader "LightweightPipeline/Standard (Physically Based)"
 
         _EmissionColor("Color", Color) = (0,0,0)
         _EmissionMap("Emission", 2D) = "white" {}
+
+        _DetailMask("Detail Mask", 2D) = "white" {}
+
+        _DetailAlbedoMap("Detail Albedo x2", 2D) = "grey" {}
+        _DetailNormalMapScale("Scale", Float) = 1.0
+        _DetailNormalMap("Normal Map", 2D) = "bump" {}
+
+        [Enum(UV0,0,UV1,1)] _UVSec("UV Set for secondary textures", Float) = 0
 
         // Blending state
         [HideInInspector] _Surface("__surface", Float) = 0.0
@@ -81,6 +93,7 @@ Shader "LightweightPipeline/Standard (Physically Based)"
 
             #pragma shader_feature _SPECULARHIGHLIGHTS_OFF
             #pragma shader_feature _GLOSSYREFLECTIONS_OFF
+            #pragma shader_feature _SPECULAR_SETUP
 
             // -------------------------------------
             // Lightweight Pipeline keywords
@@ -94,6 +107,8 @@ Shader "LightweightPipeline/Standard (Physically Based)"
 
             // -------------------------------------
             // Unity defined keywords
+            #pragma multi_compile _ DIRLIGHTMAP_COMBINED
+            #pragma multi_compile _ LIGHTMAP_ON
             #pragma multi_compile_fog
 
             //--------------------------------------
@@ -171,6 +186,37 @@ Shader "LightweightPipeline/Standard (Physically Based)"
             #include "LWRP/ShaderLibrary/LightweightPassDepthOnly.hlsl"
             ENDHLSL
         }
+
+        // This pass it not used during regular rendering, only for lightmap baking.
+        Pass
+        {
+            Name "Meta"
+            Tags{"LightMode" = "Meta"}
+
+            Cull Off
+
+            HLSLPROGRAM
+            // Required to compile gles 2.0 with standard srp library
+            #pragma prefer_hlslcc gles
+            #pragma exclude_renderers d3d11_9x
+
+            #pragma vertex LightweightVertexMeta
+            #pragma fragment LightweightFragmentMeta
+
+            #pragma shader_feature _SPECULAR_SETUP
+            #pragma shader_feature _EMISSION
+            #pragma shader_feature _METALLICSPECGLOSSMAP
+            #pragma shader_feature _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
+            #pragma shader_feature EDITOR_VISUALIZATION
+
+            #pragma shader_feature _SPECGLOSSMAP
+
+            #include "LWRP/ShaderLibrary/InputSurfacePBR.hlsl"
+            #include "LWRP/ShaderLibrary/LightweightPassMetaPBR.hlsl"
+
+            ENDHLSL
+        }
+
     }
     FallBack "Hidden/InternalErrorShader"
     CustomEditor "LightweightStandardGUI"

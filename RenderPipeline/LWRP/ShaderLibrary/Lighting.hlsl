@@ -22,11 +22,15 @@
 #endif
 
 
-
+#ifdef LIGHTMAP_ON
+    #define DECLARE_LIGHTMAP_OR_SH(lmName, shName, index) float2 lmName : TEXCOORD##index
+    #define OUTPUT_LIGHTMAP_UV(lightmapUV, lightmapScaleOffset, OUT) OUT.xy = lightmapUV.xy * lightmapScaleOffset.xy + lightmapScaleOffset.zw;
+    #define OUTPUT_SH(normalWS, OUT)
+#else
     #define DECLARE_LIGHTMAP_OR_SH(lmName, shName, index) half3 shName : TEXCOORD##index
     #define OUTPUT_LIGHTMAP_UV(lightmapUV, lightmapScaleOffset, OUT)
     #define OUTPUT_SH(normalWS, OUT) OUT.xyz = SampleSHVertex(normalWS)
-
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 //                          Light Helpers                                    //
@@ -232,11 +236,20 @@ half OneMinusReflectivityMetallic(half metallic)
 
 inline void InitializeBRDFData(half3 albedo, half metallic, half3 specular, half smoothness, half alpha, out BRDFData outBRDFData)
 {
+#ifdef _SPECULAR_SETUP
+    half reflectivity = ReflectivitySpecular(specular);
+    half oneMinusReflectivity = 1.0 - reflectivity;
+
+    outBRDFData.diffuse = albedo * (half3(1.0h, 1.0h, 1.0h) - specular);
+    outBRDFData.specular = specular;
+#else
+
     half oneMinusReflectivity = OneMinusReflectivityMetallic(metallic);
     half reflectivity = 1.0 - oneMinusReflectivity;
 
     outBRDFData.diffuse = albedo * oneMinusReflectivity;
     outBRDFData.specular = lerp(kDieletricSpec.rgb, albedo, metallic);
+#endif
 
     outBRDFData.grazingTerm = saturate(smoothness + reflectivity);
     outBRDFData.perceptualRoughness = PerceptualSmoothnessToPerceptualRoughness(smoothness);
@@ -365,9 +378,28 @@ half3 SampleLightmap(float2 lightmapUV, half3 normalWS)
     bool encodedLightmap = true;
 #endif
 
+    // The shader library sample lightmap functions transform the lightmap uv coords to apply bias and scale.
+    // However, lightweight pipeline already transformed those coords in vertex. We pass half4(1, 1, 0, 0) and
+    // the compiler will optimize the transform away.
+    half4 transformCoords = half4(1, 1, 0, 0);
+
+#ifdef DIRLIGHTMAP_COMBINED
+    return SampleDirectionalLightmap(TEXTURE2D_PARAM(unity_Lightmap, samplerunity_Lightmap),
+        TEXTURE2D_PARAM(unity_LightmapInd, samplerunity_Lightmap),
+        lightmapUV, transformCoords, normalWS, encodedLightmap, unity_Lightmap_HDR);
+#else
+    return SampleSingleLightmap(TEXTURE2D_PARAM(unity_Lightmap, samplerunity_Lightmap), lightmapUV, transformCoords, encodedLightmap, unity_Lightmap_HDR);
+#endif
 }
 
+// We either sample GI from baked lightmap or from probes.
+// If lightmap: sampleData.xy = lightmapUV
+// If probe: sampleData.xyz = L2 SH terms
+#ifdef LIGHTMAP_ON
+#define SAMPLE_GI(lmName, shName, normalWSName) SampleLightmap(lmName, normalWSName)
+#else
 #define SAMPLE_GI(lmName, shName, normalWSName) SampleSHPixel(shName, normalWSName)
+#endif
 
 half3 GlossyEnvironmentReflection(half3 reflectVector, half perceptualRoughness, half occlusion)
 {
@@ -428,7 +460,20 @@ half3 GlobalIllumination(BRDFData brdfData, half3 bakedGI, half occlusion, half3
 
 void MixRealtimeAndBakedGI(inout Light light, half3 normalWS, inout half3 bakedGI, half4 shadowMask)
 {
+#if defined(_MIXED_LIGHTING_SUBTRACTIVE) && defined(LIGHTMAP_ON)
+    bakedGI = SubtractDirectMainLightFromLightmap(light, normalWS, bakedGI);
+#endif
 
+#if defined(LIGHTMAP_ON)
+    #if defined(_MIXED_LIGHTING_SHADOWMASK)
+        // TODO:
+    #elif defined(_MIXED_LIGHTING_SUBTRACTIVE)
+        // Subtractive Light mode has direct light contribution baked into lightmap for mixed lights.
+        // We need to remove direct realtime contribution from mixed lights
+        // subtractiveModeBakedOcclusion is set 0.0 if this light occlusion was baked in the lightmap, 1.0 otherwise.
+        light.attenuation *= light.subtractiveModeAttenuation;
+    #endif
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -536,6 +581,10 @@ half4 LightweightFragmentBlinnPhong(InputData inputData, half3 diffuse, half4 sp
 
     half3 fullDiffuse = diffuseColor + inputData.vertexLighting;
     half3 finalColor = fullDiffuse * diffuse + emission;
+
+#if defined(_SPECGLOSSMAP) || defined(_SPECULAR_COLOR)
+    finalColor += specularColor;
+#endif
 
     return half4(finalColor, alpha);
 }
